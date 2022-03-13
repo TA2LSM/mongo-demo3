@@ -23,6 +23,10 @@ const courseSchema = new mongoose.Schema({
     type: String,
     required: true,
     enum: ["web", "mobile", "network"], //kategori olarak sadece buradakilere uyan bir girişe izin verilir...
+    // aşağıdaki özellikler sadece "String" olarak tanımlı alanlarda işe yarar...
+    lowercase: true, // mongoose otomatik olarak girilen metni küçük harflere çevirir
+    //uppercase: true, // mongoose otomatik olarak girilen metni büyük harflere çevirir
+    trim: true,
   },
   author: String,
   // tags için mesela string array isteniyor ama boş bir array de verilse doğrulama hatası olmuyor.
@@ -32,6 +36,7 @@ const courseSchema = new mongoose.Schema({
     type: Array,
     //required: true, // burada gereken custom validation olduğu için required bir anlam ifade etmez...
     validate: {
+      // (1) sync validator
       validator: function (v) {
         //return v.minlength > 0; // böyle yazılırsa null olarak tanımlı olma durumunda istenmeyen şeyler olabilir.
         return v && v.minlength > 0; // kursta burada ".lenght" kullanıldı ama o işlev artık kullanılamıyor.
@@ -39,6 +44,36 @@ const courseSchema = new mongoose.Schema({
       },
       message: "A course should have at least one tag!",
       // bu şekilde doğrulama hatası olursa kendi mesajımızı da görüntüleyebiliyoruz...
+
+      // (2) async validator (Kursta anlatılan bu yöntem artık kullanılamıyor!!!)
+      // isAsync: true,
+      // validator: function (v, callback) {
+      //   setTimeout(() => {
+      //     // birkaç async işlem yap ve tamamlanınca callback() fonksiyonunu çağır...
+      //     // Filesystem ya da database işlemleri gibi zaman alan bir işlem sonucu veri geldiği
+      //     // varsayılıyor.
+      //     const result = v && v.minlength > 0;
+      //     callback(result);
+      //   }, 4000);
+
+      // (2_1) async validator >> bu kısım (2) numaralı kısmın yeni literatürle çözümüdür
+      // validator: function (v) {
+      //   return new Promise((resolve, reject) => {
+      //     setTimeout(() => {
+      //       // birkaç async işlem yap ve tamamlanınca callback() fonksiyonunu çağır...
+      //       // Filesystem ya da database işlemleri gibi zaman alan bir işlem sonucu veri geldiği
+      //       // varsayılıyor.
+      //       const result = v && v.minlength > 0;
+      //       // {
+      //       //   const result = v && v.minlength > 0;
+      //       //   console.log("test");
+      //       // }
+
+      //       resolve(result);
+      //     }, 4000);
+      //   });
+      // },
+      // message: "A course should have at least one tag!",
     },
   },
   date: { type: Date, default: Date.now },
@@ -55,8 +90,10 @@ const courseSchema = new mongoose.Schema({
       // mongoose içinden bir fonksiyon buradaki fonksiyonu çağıracak.
       // "this" ifadesi mongoose içindeki o fonksiyonu ifade eder. courseSchema'sını DEĞİL!!!
     },
-    min: 10,
+    min: [10, "Must be at least $10. You entered ${VALUE}"], //{VALUE} ile girilen değere erişilebiliyor
     max: 200, // bu iki doğrulayıcı "date" için de geçerlidir...
+    get: (v) => Math.round(v), // database'ten okurken okunan rakamı yuvarlayarak geri döndürür (15,8 > 16 gibi)
+    set: (v) => Math.round(v), // database'e yazarken girilen rakamı yuvarlayarak kullanır (15,8 > 16 gibi)
   },
 });
 
@@ -70,9 +107,9 @@ const Course = mongoose.model("Course", courseSchema);
 //****************************************************************************************** */
 async function createCourse() {
   const course = new Course({
-    name: "Angular Course",
-    //category: "-",
-    category: "web",
+    name: "Additional Test Course",
+    category: "-",
+    //category: "web",
     author: "TA2LSM",
     //tags: ["angular", "frontend"],
     //tags: ["ab"],
@@ -87,15 +124,22 @@ async function createCourse() {
   // handle etmek gerekiyor yoksa reject olan bir promise unhandled olarak kalır...
   try {
     //await course.validate();
-    // kursta yukarıdaki metot kullanılıyor ama bu metot depricated (kullanımdan kalkma) olmuş.
+    // kursta yukarıdaki metot kullanılıyor ama bu metot "depricated" olmuş (kullanımdan kalkma)
 
     const result = await course.save();
     console.log(result);
-  } catch (err) {
-    //console.log(err);
-    console.log(err.message);
+  } catch (ex) {
+    // Validation error object >> detaylı hata incelemesi yapılmıştır...
+    // kursta burada bir exception oluştuğu belirtiliyor. "ex" ifadesi kullanılıyor...
+    //console.log(ex);
+    //console.log(ex.message);
+    console.log(ex.errors);
 
-    //kursta burada bir exception oluştuğu belirtiliyor. err yerine ex kullanılıyor...
+    // ex.errors.tags;
+    // ex.errors.category;
+    // ex.errors.price;
+    //for (field in ex.errors) console.log(ex.errors[field]);
+    for (field in ex.errors) console.log(ex.errors[field].message);
   }
 }
 
